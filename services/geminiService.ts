@@ -65,6 +65,47 @@ export const generateCareerPaths = async (profile: UserProfile): Promise<Generat
   }
 };
 
+export const blendRoles = async (role1: GeneratedRole, role2: GeneratedRole, profile: UserProfile): Promise<GeneratedRole> => {
+  const prompt = `
+    Act as an expert Career Architect. The user wants to combine two specific career paths into one hybrid, high-value role.
+    
+    Role 1: ${role1.title} - ${role1.description}
+    Role 2: ${role2.title} - ${role2.description}
+    
+    User Context:
+    - Skills: ${profile.skills}
+    - Interests: ${profile.interests}
+
+    Create a NEW unique job role that blends the best aspects of both.
+    - Title: Creative hybrid title.
+    - Description: How these two worlds merge.
+    - Innovative Factor: Why this combination creates a unique market advantage.
+    
+    Output valid JSON strictly adhering to the schema. Return an ARRAY containing just this ONE object.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: roleSchema,
+        temperature: 0.7,
+      },
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No content generated");
+    
+    const roles = JSON.parse(text) as GeneratedRole[];
+    return roles[0];
+  } catch (error) {
+    console.error("Error blending roles:", error);
+    throw error;
+  }
+};
+
 export const generateRoleBlueprint = async (role: GeneratedRole, profile: UserProfile): Promise<string> => {
   const prompt = `
     The user has selected the role: "${role.title}".
@@ -81,9 +122,12 @@ export const generateRoleBlueprint = async (role: GeneratedRole, profile: UserPr
     Include these sections (use H2 headers):
     1. **The Pitch**: A 30-second elevator pitch defining who they are in this role.
     2. **Gap Analysis**: What skills do they need to acquire vs. what they have.
-    3. **Action Plan**: Immediate next 3 steps (0-3 months) and long term goals (6-12 months).
-    4. **Target Market**: Types of companies to pitch to, or if entrepreneurial, who the customers are.
-    5. **Day in the Life**: A creative narrative of what a day looks like in this role.
+    3. **Custom Learning Curriculum**: 
+       - List specific SUBJECTS they must master (e.g., "Behavioral Economics", "Threejs", "Crisis Leadership").
+       - Provide a structured PROGRAM (e.g., Month 1-2: Foundation, Month 3-4: Application).
+    4. **Action Plan**: Immediate next 3 steps (0-3 months) and long term goals (6-12 months).
+    5. **Target Market**: Types of companies to pitch to, or if entrepreneurial, who the customers are.
+    6. **Day in the Life**: A creative narrative of what a day looks like in this role.
 
     Keep it inspiring, actionable, and professional.
   `;

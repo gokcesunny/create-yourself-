@@ -2,6 +2,7 @@ export enum AppStage {
   INPUT = 'INPUT',
   GENERATING = 'GENERATING',
   SELECTION = 'SELECTION',
+  BLENDING = 'BLENDING',
   BLUEPRINT = 'BLUEPRINT',
 }
 

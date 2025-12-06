@@ -4,7 +4,8 @@ import { InputWizard } from './components/InputWizard';
 import { RoleSelection } from './components/RoleSelection';
 import { BlueprintView } from './components/BlueprintView';
 import { AppStage, UserProfile, GeneratedRole } from './types';
-import { generateCareerPaths } from './services/geminiService';
+import { generateCareerPaths, blendRoles } from './services/geminiService';
+import { GitMerge } from 'lucide-react';
 
 const App: React.FC = () => {
   const [stage, setStage] = useState<AppStage>(AppStage.INPUT);
@@ -12,7 +13,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [generatedRoles, setGeneratedRoles] = useState<GeneratedRole[]>([]);
-  const [selectedRole, setSelectedRole] = useState<GeneratedRole | null>(null);
+  const [selectedRoles, setSelectedRoles] = useState<GeneratedRole[]>([]);
+  const [activeRole, setActiveRole] = useState<GeneratedRole | null>(null);
 
   const handleStart = () => {
     setHasStarted(true);
@@ -29,7 +31,6 @@ const App: React.FC = () => {
       setStage(AppStage.SELECTION);
     } catch (error) {
       console.error("Failed to generate roles", error);
-      // In a real app, handle error UI here
       alert("Something went wrong generating your career paths. Please check your API key and try again.");
       setStage(AppStage.INPUT);
     } finally {
@@ -37,13 +38,39 @@ const App: React.FC = () => {
     }
   };
 
-  const handleRoleSelect = (role: GeneratedRole) => {
-    setSelectedRole(role);
-    setStage(AppStage.BLUEPRINT);
+  const handleRoleToggle = (role: GeneratedRole) => {
+    setSelectedRoles(prev => {
+      const isSelected = prev.some(r => r.id === role.id);
+      if (isSelected) {
+        return prev.filter(r => r.id !== role.id);
+      } else {
+        if (prev.length >= 2) return prev; // Limit to 2
+        return [...prev, role];
+      }
+    });
+  };
+
+  const handleConfirmSelection = async () => {
+    if (selectedRoles.length === 1) {
+      setActiveRole(selectedRoles[0]);
+      setStage(AppStage.BLUEPRINT);
+    } else if (selectedRoles.length === 2 && userProfile) {
+      // Blend logic
+      setStage(AppStage.BLENDING);
+      try {
+        const blendedRole = await blendRoles(selectedRoles[0], selectedRoles[1], userProfile);
+        setActiveRole(blendedRole);
+        setStage(AppStage.BLUEPRINT);
+      } catch (error) {
+        console.error("Failed to blend roles", error);
+        alert("Failed to blend roles. Please try again.");
+        setStage(AppStage.SELECTION);
+      }
+    }
   };
 
   const handleBackToRoles = () => {
-    setSelectedRole(null);
+    setActiveRole(null);
     setStage(AppStage.SELECTION);
   };
 
@@ -94,16 +121,34 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {stage === AppStage.SELECTION && (
-            <div className="animate-fade-in-up">
-              <RoleSelection roles={generatedRoles} onSelectRole={handleRoleSelect} />
+          {stage === AppStage.BLENDING && (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-fade-in">
+               <div className="relative w-20 h-20 mb-8">
+                 <div className="absolute inset-0 bg-indigo-200 rounded-full animate-ping opacity-75"></div>
+                 <div className="relative w-full h-full bg-indigo-600 rounded-full flex items-center justify-center text-white">
+                    <GitMerge size={32} />
+                 </div>
+               </div>
+               <h2 className="text-3xl font-bold text-slate-800 mb-2">Synthesizing Roles</h2>
+               <p className="text-slate-500 max-w-md">Creating a unique hybrid position and generating your custom educational curriculum...</p>
             </div>
           )}
 
-          {stage === AppStage.BLUEPRINT && selectedRole && userProfile && (
+          {stage === AppStage.SELECTION && (
+            <div className="animate-fade-in-up">
+              <RoleSelection 
+                roles={generatedRoles} 
+                selectedRoles={selectedRoles}
+                onToggleRole={handleRoleToggle}
+                onConfirm={handleConfirmSelection}
+              />
+            </div>
+          )}
+
+          {stage === AppStage.BLUEPRINT && activeRole && userProfile && (
             <div className="animate-fade-in">
               <BlueprintView 
-                role={selectedRole} 
+                role={activeRole} 
                 profile={userProfile} 
                 onBack={handleBackToRoles} 
               />
